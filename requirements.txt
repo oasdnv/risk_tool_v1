@@ -8,3 +8,4 @@ streamlit
 python-dotenv
 google-genai
 scikit-learn
+altair==4.2.2
