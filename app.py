@@ -159,7 +159,7 @@ col1.metric("Historical 95% VaR (Daily)", f"{var_95:.2%}", "Risk of Loss", delta
 col2.metric("Worst-Case Simulated Drawdown (5%)", f"{np.percentile(drawdowns, 5):.2%}", "Stress Test", delta_color="inverse")
 col3.metric("Highest Beta Asset", f"{max(betas, key=betas.get)} ({max(betas.values()):.2f})")
 
-st.divider()
+st.markdown("---")()
 
 # 2. Interactive Charts (Plotly)
 col_chart1, col_chart2 = st.columns(2)
@@ -181,7 +181,7 @@ fig_vol = px.line(roll_vol[list(weights.keys())].dropna())
 fig_vol.update_layout(xaxis_title="Date", yaxis_title="Volatility", legend_title="Assets")
 st.plotly_chart(fig_vol, use_container_width=True)
 
-st.divider()
+st.markdown("---")()
 
 # ==============================================================================
 # AI HEDGE GENERATOR TRIGGER
