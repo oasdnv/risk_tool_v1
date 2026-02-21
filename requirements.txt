@@ -2,6 +2,7 @@ yfinance
 pandas
 numpy
 scipy
+statsmodels
 plotly
 streamlit
 python-dotenv
