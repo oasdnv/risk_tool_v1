@@ -5,5 +5,5 @@ scipy
 plotly
 streamlit
 python-dotenv
-google-generativeai
+google-genai
 scikit-learn
