@@ -66,18 +66,4 @@ def beta_exposure(returns, benchmark_col="SPY"):
             betas[col] = float(lr.coef_[0])
     return betas
 
-def historical_var(returns, weights, confidence_level=0.95):
-    assets = list(weights.keys())
-    w_array = np.array([weights[ticker] for ticker in assets])
-    port_returns = returns[assets].dot(w_array)
-    return float(np.percentile(port_returns, 100 * (1 - confidence_level)))
-
-def monte_carlo_drawdown(returns, weights, n_simulations=1000, n_days=252):
-    assets = list(weights.keys())
-    w_array = np.array([weights[ticker] for ticker in assets])
-    port_returns = returns[assets].dot(w_array)
-    mu = port_returns.mean()
-    sigma = port_returns.std()
-    
-    simulated_returns = np.random.normal(mu, sigma, (n_days, n_simulations))
-    price_paths =
+def historical_var
