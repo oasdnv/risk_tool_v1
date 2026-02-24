@@ -1,4 +1,3 @@
-
 import os
 import json
 import warnings
@@ -24,7 +23,7 @@ load_dotenv()
 # ==============================================================================
 # CORE MATH & DATA FUNCTIONS (Cached for web speed)
 # ==============================================================================
-@st.cache_data(ttl=3600) # Cache the data for 1 hour so the web app is fast
+@st.cache_data(ttl=3600) 
 def download_prices(tickers, start_date, end_date):
     data = yf.download(tickers, start=start_date, end=end_date, progress=False)
     if isinstance(data.columns, pd.MultiIndex):
@@ -109,7 +108,7 @@ def generate_hedge_plan(features_dict, api_key):
 # ==============================================================================
 # STREAMLIT UI LAYOUT
 # ==============================================================================
-st.title("🛡️ Portfolio Risk & Hedge AI ")
+st.title("🛡️ Portfolio Risk & Hedge AI (Steady-State)")
 st.markdown("Analyzing end-of-day market conditions and generating AI-driven hedge optimizations.")
 
 # --- SIDEBAR: User Inputs ---
@@ -143,8 +142,10 @@ with st.sidebar:
 tickers = list(weights.keys()) + ["SPY"]
 
 with st.spinner("Fetching steady-state market data..."):
-    # We use yfinance here instead of Alpha Vantage so the web dashboard loads instantly
     prices = download_prices(tickers, start_date="2023-01-01", end_date="2024-01-01")
+    if prices.empty:
+        st.error("🚨 Yahoo Finance failed to return data. Please clear the cache and try again.")
+        st.stop()
     returns = compute_returns(prices)
 
 # Calculate Metrics
@@ -182,7 +183,7 @@ fig_vol = px.line(roll_vol[list(weights.keys())].dropna())
 fig_vol.update_layout(xaxis_title="Date", yaxis_title="Volatility", legend_title="Assets")
 st.plotly_chart(fig_vol, use_container_width=True)
 
-st.markdown("---")()
+st.markdown("---")
 
 # ==============================================================================
 # AI HEDGE GENERATOR TRIGGER
