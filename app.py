@@ -1,3 +1,4 @@
+
 import os
 import json
 import warnings
@@ -108,7 +109,7 @@ def generate_hedge_plan(features_dict, api_key):
 # ==============================================================================
 # STREAMLIT UI LAYOUT
 # ==============================================================================
-st.title("🛡️ Portfolio Risk & Hedge AI (Steady-State)")
+st.title("🛡️ Portfolio Risk & Hedge AI ")
 st.markdown("Analyzing end-of-day market conditions and generating AI-driven hedge optimizations.")
 
 # --- SIDEBAR: User Inputs ---
