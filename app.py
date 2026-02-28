@@ -29,30 +29,25 @@ load_dotenv()
 def generate_mock_data(tickers, start_date, end_date):
     """FAILSAFE: Generates realistic random walk data if Yahoo Finance blocks the server."""
     dates = pd.date_range(start=start_date, end=end_date, freq='B')
-    np.random.seed(42) # Keep it reproducible 
-    
+    np.random.seed(42)
+
     mock_data = {}
     for ticker in tickers:
-        # Generate random daily returns (mean 0.05%, std dev 1.5%)
         daily_returns = np.random.normal(0.0005, 0.015, len(dates))
-        # Create a realistic price path using Geometric Brownian Motion
         prices = 100 * np.exp(np.cumsum(daily_returns))
         mock_data[ticker] = prices
-        
+
     return pd.DataFrame(mock_data, index=dates)
 
-@st.cache_data(ttl=3600) 
+@st.cache_data(ttl=3600)
 def download_prices(tickers, start_date, end_date):
     try:
-        # 1. Attempt to fetch real data
         data = yf.download(tickers, start=start_date, end=end_date, progress=False)
-        
-        # 2. Check if Yahoo blocked the request (empty data)
+
         if data.empty:
             st.toast("⚠️ Yahoo Finance API blocked. Using synthetic failsafe data.", icon="🛡️")
             return generate_mock_data(tickers, start_date, end_date)
-            
-        # 3. Handle multi-index columns cleanly
+
         if isinstance(data.columns, pd.MultiIndex):
             if 'Close' in data.columns.levels[0]:
                 prices = data['Close']
@@ -61,18 +56,16 @@ def download_prices(tickers, start_date, end_date):
                 prices.columns = prices.columns.droplevel(0)
         else:
             prices = data['Close'] if 'Close' in data else data
-            
-        # 4. Clean up any missing days without destroying the whole dataframe
+
         prices = prices.dropna(axis=1, how='all').ffill().bfill()
-        
+
         if len(prices.columns) < len(tickers):
             st.toast("⚠️ Partial data fetched. Falling back to synthetic failsafe data.", icon="🛡️")
             return generate_mock_data(tickers, start_date, end_date)
-            
+
         return prices
 
     except Exception as e:
-        # If absolutely anything crashes, use the failsafe
         st.toast("⚠️ Data connection failed. Using synthetic failsafe data.", icon="🛡️")
         return generate_mock_data(tickers, start_date, end_date)
 
@@ -89,7 +82,7 @@ def beta_exposure(returns, benchmark_col="SPY"):
     betas = {}
     if benchmark_col not in returns.columns:
         return betas
-        
+
     X = returns[benchmark_col].values.reshape(-1, 1)
     lr = LinearRegression()
     for col in returns.columns:
@@ -101,20 +94,22 @@ def beta_exposure(returns, benchmark_col="SPY"):
 
 def historical_var(returns, weights, confidence_level=0.95):
     assets = [t for t in weights.keys() if t in returns.columns]
-    if not assets: return 0.0
+    if not assets:
+        return 0.0
     w_array = np.array([weights[ticker] for ticker in assets])
     port_returns = returns[assets].dot(w_array)
     return float(np.percentile(port_returns, 100 * (1 - confidence_level)))
 
 def monte_carlo_drawdown(returns, weights, n_simulations=1000, n_days=252):
     assets = [t for t in weights.keys() if t in returns.columns]
-    if not assets: return np.zeros(n_simulations)
+    if not assets:
+        return np.zeros(n_simulations)
     w_array = np.array([weights[ticker] for ticker in assets])
     port_returns = returns[assets].dot(w_array)
-    
+
     mu = port_returns.mean()
     sigma = port_returns.std()
-    
+
     simulated_returns = np.random.normal(mu, sigma, (n_days, n_simulations))
     price_paths = np.exp(np.cumsum(simulated_returns, axis=0))
     rolling_max = np.maximum.accumulate(price_paths, axis=0)
@@ -128,28 +123,28 @@ def generate_hedge_plan(features_dict, api_key):
     client = genai.Client(api_key=api_key)
     prompt = f"""
     You are a quantitative portfolio manager and risk specialist.
-    Analyze the provided portfolio risk metrics. 
+    Analyze the provided portfolio risk metrics.
     Propose a targeted hedging strategy using standard US Sector ETFs, Gold (GLD), or Silver (SLV).
-    
+
     You MUST output your response STRICTLY as a valid JSON object matching this schema exactly:
     {{
         "risk_assessment": "Summary of current portfolio risks.",
         "concentration_warning": "Identification of any dangerous sector concentrations.",
         "proposed_hedges": [
             {{
-                "instrument": "Ticker symbol", 
-                "weight_adjustment_pct": "Float %", 
+                "instrument": "Ticker symbol",
+                "weight_adjustment_pct": "Float %",
                 "reason": "Justification"
             }}
         ]
     }}
-    
+
     Portfolio Risk Metrics:
     {json.dumps(features_dict, indent=2)}
     """
-    
+
     response = client.models.generate_content(
-        model="gemini-2.5-flash-lite", 
+        model="gemini-2.5-flash-lite",
         contents=prompt,
         config={"response_mime_type": "application/json"}
     )
@@ -165,7 +160,7 @@ with st.sidebar:
     st.header("Portfolio Parameters")
     env_key = os.getenv("GEMINI_API_KEY", "")
     api_key = st.text_input("Gemini API Key", value=env_key, type="password")
-    
+
     st.subheader("Asset Allocations (%)")
     w_aapl = st.slider("AAPL (Apple)", 0.0, 1.0, 0.25)
     w_msft = st.slider("MSFT (Microsoft)", 0.0, 1.0, 0.25)
@@ -173,9 +168,9 @@ with st.sidebar:
     w_xlk = st.slider("XLK (Tech ETF)", 0.0, 1.0, 0.20)
     w_gld = st.slider("GLD (Gold)", 0.0, 1.0, 0.10)
     w_slv = st.slider("SLV (Silver)", 0.0, 1.0, 0.10)
-    
+
     weights = {"AAPL": w_aapl, "MSFT": w_msft, "XLE": w_xle, "XLK": w_xlk, "GLD": w_gld, "SLV": w_slv}
-    
+
     total_w = sum(weights.values())
     if total_w != 1.0 and total_w > 0:
         weights = {k: v / total_w for k, v in weights.items()}
@@ -206,28 +201,67 @@ else:
 
 st.markdown("---")
 
+# FIX: Resolve column intersection once, reuse across all chart blocks
+portfolio_tickers = list(weights.keys())
+available_in_returns = [t for t in portfolio_tickers if t in returns.columns]
+
 col_chart1, col_chart2 = st.columns(2)
 
 with col_chart1:
     st.subheader("Asset Correlation Matrix")
-    valid_assets = [t for t in weights.keys() if t in corr_mat.columns]
-    if valid_assets:
-        subset_corr = corr_mat.loc[valid_assets, valid_assets]
-        fig_corr = px.imshow(subset_corr, x=subset_corr.columns, y=subset_corr.index, text_auto=".2f", color_continuous_scale="RdBu_r", aspect="auto")
+    # FIX: Intersect with corr_mat columns (not returns.columns) — they should match,
+    # but being explicit prevents a KeyError if SPY or any ticker slips in/out.
+    valid_corr_assets = [t for t in portfolio_tickers if t in corr_mat.columns]
+    if valid_corr_assets:
+        subset_corr = corr_mat.loc[valid_corr_assets, valid_corr_assets]
+        fig_corr = px.imshow(
+            subset_corr,
+            x=subset_corr.columns.tolist(),
+            y=subset_corr.index.tolist(),
+            text_auto=".2f",
+            color_continuous_scale="RdBu_r",
+            aspect="auto",
+            zmin=-1,
+            zmax=1,
+        )
+        fig_corr.update_layout(margin=dict(l=0, r=0, t=30, b=0))
         st.plotly_chart(fig_corr, use_container_width=True)
+    else:
+        st.warning("No correlation data available for portfolio assets.")
 
 with col_chart2:
     st.subheader("Monte Carlo Max Drawdown (1-Year)")
-    fig_mc = go.Figure(data=[go.Histogram(x=drawdowns, nbinsx=50, marker_color='#E74C3C')])
-    fig_mc.update_layout(xaxis_title="Max Drawdown", yaxis_title="Frequency", showlegend=False)
-    st.plotly_chart(fig_mc, use_container_width=True)
+    # FIX: Guard against all-zero drawdowns array (happens when no valid assets)
+    if drawdowns is not None and len(drawdowns) > 0 and not np.all(drawdowns == 0):
+        fig_mc = go.Figure(data=[go.Histogram(x=drawdowns, nbinsx=50, marker_color='#E74C3C')])
+        fig_mc.update_layout(
+            xaxis_title="Max Drawdown",
+            yaxis_title="Frequency",
+            showlegend=False,
+            margin=dict(l=0, r=0, t=30, b=0),
+        )
+        st.plotly_chart(fig_mc, use_container_width=True)
+    else:
+        st.warning("Not enough data to run Monte Carlo simulation.")
 
 st.subheader("21-Day Rolling Volatility (Annualized)")
-valid_vol_assets = [t for t in weights.keys() if t in roll_vol.columns]
+# FIX: Intersect with roll_vol columns explicitly
+valid_vol_assets = [t for t in portfolio_tickers if t in roll_vol.columns]
 if valid_vol_assets:
-    fig_vol = px.line(roll_vol[valid_vol_assets].dropna())
-    fig_vol.update_layout(xaxis_title="Date", yaxis_title="Volatility", legend_title="Assets")
-    st.plotly_chart(fig_vol, use_container_width=True)
+    vol_data = roll_vol[valid_vol_assets].dropna()
+    if not vol_data.empty:
+        fig_vol = px.line(vol_data)
+        fig_vol.update_layout(
+            xaxis_title="Date",
+            yaxis_title="Volatility",
+            legend_title="Assets",
+            margin=dict(l=0, r=0, t=30, b=0),
+        )
+        st.plotly_chart(fig_vol, use_container_width=True)
+    else:
+        st.warning("Not enough data to compute rolling volatility (need >21 trading days).")
+else:
+    st.warning("No volatility data available for portfolio assets.")
 
 st.markdown("---")
 
